@@ -3,7 +3,7 @@ from django.db import models
 
 # Create your models here.
 
-class User(models.Model):
+class User(models.Model):  # 用户模型
     username = models.CharField(max_length=20, unique=True)
     password = models.CharField(max_length=100)
     creat_time = models.DateField('创建时间', auto_now_add=True)
@@ -11,7 +11,7 @@ class User(models.Model):
     num = models.PositiveIntegerField(default=30)
 
 
-class Word(models.Model):
+class Word(models.Model):  # 单词模型
     user_id = models.ForeignKey('User', on_delete=models.CASCADE)
     word = models.CharField(max_length=50)
     time = models.PositiveIntegerField(default=0)
@@ -19,6 +19,6 @@ class Word(models.Model):
     creat_time = models.DateField('创建时间', auto_now_add=True)
 
 
-class Error(models.Model):
+class Error(models.Model):  # 错误模型
     user_id = models.ForeignKey('User', on_delete=models.CASCADE)
     word_id = models.ForeignKey('Word', on_delete=models.CASCADE)

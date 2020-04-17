@@ -19,15 +19,20 @@ class AuthMiddleware:
         return response
 
     def process_view(self, request, view_func, view_args, view_kwargs):
-        if request.path_info != "/api/user/login/" and request.path_info != "/api/user/res/":
-            token = request.META.get('HTTP_TOKEN')
+        if request.path_info != "/api/user/login/" and request.path_info != "/api/user/res/":  # 判断是登录注册 不需要验证token
+            token = request.META.get('HTTP_TOKEN')  # 获取token
             if token is None:
                 return HttpResponse(json.dumps({"code": 403, "data": None, "msg": "token未知"}, ensure_ascii=False),
                                     content_type="application/json,charset=utf-8", status=403)
             else:
-                toke_user = jwt_decode_handler(token)
-                if int(time.time()) > toke_user['exp'] + 24 * 60 * 60 * 1000:
-                    return HttpResponse(json.dumps({"code": 403, "data": None, "msg": "token过期"}, ensure_ascii=False),
+                try:
+                    toke_user = jwt_decode_handler(token)  # 验证token
+                    if int(time.time()) > toke_user['exp'] + 24 * 60 * 60 * 1000:  # 验证token时间过期
+                        return HttpResponse(
+                            json.dumps({"code": 403, "data": None, "msg": "token过期"}, ensure_ascii=False),
+                            content_type="application/json,charset=utf-8", status=403)
+                    elif int(time.time()) > toke_user['exp']:  # 验证token时间过期但是可续签的情况
+                        self.ref = True
+                except:  # 错误的token
+                    return HttpResponse(json.dumps({"code": 403, "data": None, "msg": "token未知"}, ensure_ascii=False),
                                         content_type="application/json,charset=utf-8", status=403)
-                elif int(time.time()) > toke_user['exp']:
-                    self.ref = True

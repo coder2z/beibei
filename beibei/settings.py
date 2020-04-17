@@ -48,7 +48,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'api.middleware.AuthMiddleware'
+    'api.middleware.AuthMiddleware'  # 检测token到期时间中间件
 ]
 
 ROOT_URLCONF = 'beibei.urls'
