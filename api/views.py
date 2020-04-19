@@ -14,7 +14,7 @@ from django.views import View
 from rest_framework_jwt.authentication import jwt_decode_handler
 from rest_framework_jwt.settings import api_settings
 from api import models
-from api.models import Word, Error, User
+from api.models import Word, Error, User, Task
 
 
 def rep(msg, data, code):  # 规定数据返回格式
@@ -121,7 +121,7 @@ def upload(request):  # 上传单词
             try:
                 with transaction.atomic():  # 开启数据库事务 这里涉及到批量插入
                     for x in text_arr:
-                        word_list_to_insert.append(Word(user_id=ushering, word=x, time=ushering.s_time))  # 生成插入数组
+                        word_list_to_insert.append(Word(user_id=ushering, word=x))  # 生成插入数组
                     Word.objects.bulk_create(word_list_to_insert)  # 批量插入
                     result = rep("提交成功", None, 200)
             except:
@@ -152,42 +152,50 @@ def ref(request):  # 刷新token
 
 
 def study(request):  # 生成学习数据
+    global result
     if request.method != 'POST':
         user = User.objects.get(id=getUser(request)["user_id"])  # 查询用户设置的每日数量
-        data_link = Word.objects.filter(Q(user_id=getUser(request)["user_id"]) &
-                                        Q(grade=0)).order_by('?')[
-                    :user.num]  # 数据库查询当前用户还没有学习的单词 也就是等级为0的单词 随机取user.num个不到user.num个全部去除。
-        datas = list()
-        for data in data_link:  # 对查询出来的数据进行数据重构
-            item = {}
-            item["val"] = data.word
-            item["id"] = data.id
-            item["iserror"] = False
-            item['isreview'] = False
-            datas.append(item)
-        error_link = Error.objects.filter(user_id=getUser(request)["user_id"])  # 查询出当前用户数据库冲标记为错误的单词
-        for error in error_link:
-            item = {}
-            item["val"] = error.word_id.word
-            item["id"] = error.word_id.id
-            item["iserror"] = True
-            item['isreview'] = False
-            datas.append(item)
-        all_link = Word.objects.filter(user_id=getUser(request)["user_id"])  # 查询出当前用户数据库所有单词
-        ushering = models.User.objects.get(id=getUser(request)['user_id'])  # 查询出当前用户的基本信息
-        time_s = [1, 3, 7, 15, 0]  # 定义判断时间
-        for all in all_link:
-            time_c = ushering.s_time - all.time  # 计算出今天距离这个单词第一次学习的时间的差
-            if time_c in time_s:  # 判断时间
+        task_link = Task.objects.filter(user_id=user)
+        if len(task_link):
+            for task in task_link:
+                result = task.text
+            return HttpResponse(result, content_type="application/json,charset=utf-8")
+        else:
+            data_link = Word.objects.filter(Q(user_id=getUser(request)["user_id"]) &
+                                            Q(grade=0)).order_by('?')[
+                        :user.num]  # 数据库查询当前用户还没有学习的单词 也就是等级为0的单词 随机取user.num个不到user.num个全部去除。
+            datas = list()
+            for data in data_link:  # 对查询出来的数据进行数据重构
                 item = {}
-                item["val"] = all.word
-                item["id"] = all.id
+                item["val"] = data.word
+                item["id"] = data.id
                 item["iserror"] = False
-                item['isreview'] = True
+                item['isreview'] = False
                 datas.append(item)
-        run_function = lambda x, y: x if y in x else x + [y]  # 对数据进行去重
-        datas = reduce(run_function, [[], ] + datas)
-        result = rep("获取成功", datas, 200)
+            error_link = Error.objects.filter(user_id=getUser(request)["user_id"])  # 查询出当前用户数据库冲标记为错误的单词
+            for error in error_link:
+                item = {}
+                item["val"] = error.word_id.word
+                item["id"] = error.word_id.id
+                item["iserror"] = True
+                item['isreview'] = False
+                datas.append(item)
+            all_link = Word.objects.filter(user_id=getUser(request)["user_id"])  # 查询出当前用户数据库所有单词
+            ushering = models.User.objects.get(id=getUser(request)['user_id'])  # 查询出当前用户的基本信息
+            time_s = [1, 3, 7, 15, 0]  # 定义判断时间
+            for all in all_link:
+                time_c = ushering.s_time - all.time  # 计算出今天距离这个单词第一次学习的时间的差
+                if time_c in time_s:  # 判断时间
+                    item = {}
+                    item["val"] = all.word
+                    item["id"] = all.id
+                    item["iserror"] = False
+                    item['isreview'] = True
+                    datas.append(item)
+            run_function = lambda x, y: x if y in x else x + [y]  # 对数据进行去重
+            datas = reduce(run_function, [[], ] + datas)
+            result = rep("获取成功", datas, 200)
+            Task.objects.create(user_id=user, text=result)
     else:
         result = rep("非法请求", None, 100)
     return HttpResponse(json.dumps(result, ensure_ascii=False),
@@ -197,6 +205,9 @@ def study(request):  # 生成学习数据
 def word(request, id):  # get修改单词的等级 每次加一 最多加到5  post记录错误单词
     if request.method != 'POST':
         word = Word.objects.get(id=id)  # 查询当前单词星级
+        user = User.objects.get(id=getUser(request)["user_id"])
+        if word.time == 0:
+            word.time = user.s_time
         if word.grade == 5:  # 判断星级最高
             word.grade = word.grade
         else:
@@ -287,9 +298,13 @@ def userStudy(request):  # 学习时间加一
     if request.method != 'POST':
         try:
             user = User.objects.get(id=getUser(request)["user_id"])  # 查询学习时间
-            user.s_time = user.s_time + 1  # 学习时间加一
-            user.save()
-            result = rep("提交成功", None, 200)
+            if user.s_time != user.up_time:
+                user.up_time = user.s_time
+                user.s_time = user.s_time + 1  # 学习时间加一
+                user.save()
+                result = rep("提交成功", None, 200)
+            else:
+                result = rep("你今天以及学习过了", None, 100)
         except:
             result = rep("提交失败", None, 100)
     else:
@@ -339,8 +354,11 @@ def delWord(request, id):  # 删除单词
 def ok(request):  # 记录每日学习任务完成
     if request.method != 'POST':
         try:
-            error_link = Error.objects.filter(user_id=getUser(request)["user_id"])  # 删除错误表
-            error_link.delete()
+            with transaction.atomic():
+                error_link = Error.objects.filter(user_id=getUser(request)["user_id"])  # 删除错误表
+                error_link.delete()
+                task_link = Task.objects.filter(user_id=getUser(request)["user_id"])  # 删除任务表
+                task_link.delete()
             result = rep("记录成功", None, 200)
         except:
             result = rep("记录失败", None, 100)

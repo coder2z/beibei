@@ -4,6 +4,7 @@ from django.db import models
 # Create your models here.
 
 class User(models.Model):  # 用户模型
+    up_time = models.PositiveIntegerField(default=0)
     username = models.CharField(max_length=20, unique=True)
     password = models.CharField(max_length=100)
     creat_time = models.DateField('创建时间', auto_now_add=True)
@@ -22,3 +23,9 @@ class Word(models.Model):  # 单词模型
 class Error(models.Model):  # 错误模型
     user_id = models.ForeignKey('User', on_delete=models.CASCADE)
     word_id = models.ForeignKey('Word', on_delete=models.CASCADE)
+
+
+class Task(models.Model):  # 任务模型
+    user_id = models.ForeignKey('User', on_delete=models.CASCADE)
+    text = models.TextField()
+    creat_time = models.DateField('创建时间', auto_now_add=True)
